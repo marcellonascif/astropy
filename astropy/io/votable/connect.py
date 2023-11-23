@@ -6,6 +6,8 @@ import os
 import numpy as np
 
 from astropy.io import registry as io_registry
+from astropy.io.misc.parquet import read_table_parquet
+from astropy.io.votable.tree import parse_single_table
 from astropy.table import Table
 from astropy.table.column import BaseColumn
 from astropy.units import Quantity
@@ -277,4 +279,32 @@ def write_table_votable_parquet(input, output, column_metadata, *, overwrite=Fal
         f.write("".join(lines))
 
 
+def read_table_votable_parquet(file_votable):
+    """
+    ! Still needs a documentation
+    ...
+    """
+    # Ler o arquivo VOTable
+    votable = parse_single_table(file_votable)
+
+    # Verificar se a tag <STREAM> existe e obter o caminho do arquivo Parquet
+    stream_element = votable.get_field_by_id("STREAM")
+    if stream_element is None:
+        raise ValueError("Tag <STREAM> não encontrada no VOTable.")
+    parquet_file = stream_element.attrib["href"]
+
+    # Ler o arquivo Parquet
+    parquet_data = read_table_parquet(parquet_file)
+
+    # Adicionar metadados do VOTable aos dados do Parquet
+    for colname in parquet_data.colnames:
+        if colname in votable.fields:
+            votable_field = votable.get_field_by_id_or_name(colname)
+            parquet_data[colname].unit = votable_field.unit
+            # Adicionar outros metadados conforme necessário
+
+    return Table(parquet_data)
+
+
 io_registry.register_writer("votable.parquet", Table, write_table_votable_parquet)
+io_registry.register_reader("votable.parquet", Table, read_table_votable_parquet)
